@@ -1,111 +1,179 @@
-﻿using UnityEngine;
+﻿using Unity.Burst.Intrinsics;
+using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D), typeof(Collider2D))]
 public class ZombieMovement : MonoBehaviour
 {
-    public string zombieName = "aaa"; // 좀비 이름   
+    public float moveSpeed = 2f;                  // 걷는 속도
+    public float minJumpForce = 5f;               // 최소 점프 파워(혹시 모르니 바닥에도 쓸 수 있게)
+    public float rayDistance = 0.5f;              // 앞 좀비 감지 거리
+    public LayerMask zombieLayer;                 // 좀비 레이어
+    public LayerMask groundLayer;
 
-    [Header("이동 속도")]
-    public float walkSpeed = 2f;    // 좌(–) 방향 걷기 속도
-    public float jumpSpeed = 2f;    // 수직 오르기 속도
-    public float descendSpeed = 3f;    // 수직 내려오기 속도
+    private Rigidbody2D rb;
+    private bool isJumping = false;
 
-    [Header("밀어내기 세팅")]
-    public float pushBackForce = 5f;    // 앞좀비를 뒤로 밀어낼 힘
+    private GameObject frontZombie;
+    private GameObject backZombie;
 
-    [Header("센서 세팅")]
-    public LayerMask groundLayer;       // 블록/바닥/좀비 레이어 포함
-    public float sensorDistance = 0.1f; // Ray 길이
+    public enum ZombieState
+    {
+        Walking,
+        Jumping,
+        Back
+    }
 
-    enum State { Walking, Jump }
-    State state = State.Walking;
 
-    Rigidbody2D rb;
-    Collider2D col;
-    float halfHeight;
+    private ZombieState zombieState = ZombieState.Walking;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        col = GetComponent<Collider2D>();
-        // Dynamic으로 두어 AddForce가 먹히게
-        rb.bodyType = RigidbodyType2D.Dynamic;
-        rb.gravityScale = 0f;
-        halfHeight = col.bounds.extents.y;
     }
 
-    void Update()
+    private void Update()
     {
-        switch (state)
+        Debug.Log(gameObject.name + " : " + rb.velocity);
+        switch (zombieState)
         {
-            case State.Walking:
-                HandleWalking();
+            case ZombieState.Walking:
+                Walking();
                 break;
-
-            case State.Jump:
-                HandleJumping();
+            case ZombieState.Jumping:
+                Jumping();
+                break;
+            case ZombieState.Back:
+                Back();
                 break;
         }
-        UpdateSortingOrder();
     }
 
-    void HandleWalking()
+    private void Walking()
     {
-        rb.gravityScale = 0f;
-        rb.velocity = Vector2.left * walkSpeed;
+        Debug.Log($"{gameObject.name} 이동");
 
-        Physics2D.queriesStartInColliders = false;
-        RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.left, sensorDistance);
+        // 이동
+        rb.velocity = new Vector2(-moveSpeed, 0);
+        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
+    }
 
-        if (hit)
+    private void Jumping()
+    {
+        // Y축 제한 해제(점프 순간에만)
+        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+        if (!isJumping)
         {
-            if (hit.collider.tag == "Zombie")
-            {
-                Debug.Log($"{zombieName} 앞에 있는 좀비 발견 {hit.collider.name}");
-                state = State.Jump;
-            }
-
-            else
-            {
-
-            }
+            Debug.Log($"{gameObject.name} 점프 ");
+            // 대각선 왼쪽 위 점프를 더 강하게, X축 이동력을 확실히 주기!
+            float jumpX = -moveSpeed * 1.5f;  // ← 튜닝!
+            float jumpY = minJumpForce;       // 점프력
+            Debug.Log($"점프 전 moveSpeed: {moveSpeed}");
+            rb.velocity = new Vector2(-moveSpeed, minJumpForce);
+            Debug.Log($"점프 직후 velocity: {rb.velocity}");
+            isJumping = true;
         }
+        else
+        {
+            Debug.Log($"{gameObject.name} 점프 중");
+        }
+    }
+
+    private void Back()
+    {
+        Debug.Log($"{gameObject.name} 뒤로");
+
+        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
+
+        rb.velocity = Vector2.right * moveSpeed;
 
 
     }
 
-    void HandleJumping()
+    public void SetState(ZombieState state)
     {
-        rb.velocity = new Vector2(rb.velocity.x, jumpSpeed);
-    }
-
-
-    void UpdateSortingOrder()
-    {
-        //// y값 기반으로 렌더링 순서 자동 조절
-        //var sr = GetComponent<SpriteRenderer>();
-        //sr.sortingOrder = -(int)(transform.position.y * 100);
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        // 디버그용 Ray 시각화
-        Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, (Vector2)transform.position + Vector2.left * sensorDistance);
+        zombieState = state;
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Zombie"))
+        foreach(var contact in collision.contacts)
         {
-            // 좀비와 충돌 시 밀어내기
-            Rigidbody2D otherRb = collision.gameObject.GetComponent<Rigidbody2D>();
-            if (otherRb != null)
+            if (contact.normal.x > 0.7f)
             {
-                Vector2 pushDirection = (Vector2)transform.position - (Vector2)collision.transform.position;
-                otherRb.AddForce(pushDirection.normalized * pushBackForce, ForceMode2D.Impulse);
-                state = State.Walking; // 밀어내기 후 다시 걷기 상태로 전환
+                Debug.Log($"{gameObject.name} 기준 왼쪽으로 {collision.gameObject.name}이 닿음");
+
+                CheckOnLeft(collision);
+            }
+
+            if (contact.normal.y < -0.7f)
+            {
+                Debug.Log($"{gameObject.name} 기준 위쪽으로 {collision.gameObject.name}이 닿음");
+                CheckOnUp(collision);
+            }
+
+            if (contact.normal.y > 0.7f)
+            {
+                Debug.Log($"{gameObject.name} 기준 아래쪽으로 {collision.gameObject.name}이 닿음");
+                CheckDown(collision);
+
             }
         }
+    }
+
+    private void CheckOnLeft(Collision2D col)
+    {
+        if(col.collider.CompareTag("Zombie"))
+        {
+            if (zombieState == ZombieState.Walking)
+            {
+                frontZombie = col.gameObject;
+                SetState(ZombieState.Jumping);
+            }
+
+            else if (zombieState == ZombieState.Back)
+            {
+                zombieState = ZombieState.Walking;
+            }
+        }
+
+    }
+
+    private void CheckOnUp(Collision2D col)
+    {
+        if(col.collider.CompareTag("Zombie"))
+        {
+            if(zombieState == ZombieState.Walking)
+            {
+                SetState(ZombieState.Back);
+            }
+        }
+    }
+
+    private void CheckDown(Collision2D col)
+    {
+        // Jump -> Walk(바닥에 닿았을 때, y값 변화)
+        if(col.collider.CompareTag("Ground"))
+        {
+            if (zombieState == ZombieState.Jumping && isJumping)
+            {
+                SetState(ZombieState.Walking);
+                isJumping = false;
+            }
+        }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        // Ray 시각화 (디버그용)
+        Gizmos.color = Color.red;
+        Vector2 left = (Vector2)transform.position - new Vector2(0.7f, 0);
+
+        Gizmos.DrawLine(left, left + Vector2.left * rayDistance);
+
+        Gizmos.color = Color.blue;
+        Vector2 down = (Vector2)transform.position - new Vector2(0, 0.5f);
+
+        Gizmos.DrawLine(down, down + Vector2.down * rayDistance);
     }
 }
