@@ -6,15 +6,29 @@ public class ZombieMovement : MonoBehaviour
 {
     public float moveSpeed = 2f;                  // 걷는 속도
     public float minJumpForce = 5f;               // 최소 점프 파워(혹시 모르니 바닥에도 쓸 수 있게)
-    public float rayDistance = 0.5f;              // 앞 좀비 감지 거리
+    public float backDistance = 1.0f;             // 뒤로 이동할 최소 거리
+
+    [Header("앞쪽 레이")]
+    public float frontRayOffset = 0.2f;          // 앞쪽 Ray 오프셋
+    public float frontRayDistance = 0.5f;          // 앞쪽 Ray 거리
+
+    [Header("위쪽 레이")]
+    public float upRayOffset = 1.0f;             // 위쪽 Ray 오프셋
+    public float upRayDistance = 0.5f;            // 위쪽 Ray 거리
+
+    [Header("아래쪽 레이")]
+    public float downRayOffset = 0.1f;           // 아래쪽 Ray 오프셋
+    public float downRayDistance = 0.5f;          // 아래쪽 Ray 거리
+
     public LayerMask zombieLayer;                 // 좀비 레이어
     public LayerMask groundLayer;
 
     private Rigidbody2D rb;
+
     private bool isJumping = false;
+    private Vector2 backStartPos;                // 뒤로 이동 시작 위치
 
     private GameObject frontZombie;
-    private GameObject backZombie;
 
     public enum ZombieState
     {
@@ -24,7 +38,7 @@ public class ZombieMovement : MonoBehaviour
     }
 
 
-    private ZombieState zombieState = ZombieState.Walking;
+    public ZombieState zombieState = ZombieState.Walking;
 
     void Awake()
     {
@@ -33,7 +47,51 @@ public class ZombieMovement : MonoBehaviour
 
     private void Update()
     {
-        Debug.Log(gameObject.name + " : " + rb.velocity);
+        // 앞쪽 Ray
+        RaycastHit2D frontRay = Physics2D.Raycast((Vector2)transform.position - new Vector2(frontRayOffset, 0), Vector2.left, frontRayDistance);
+        if(frontRay)
+        {
+            if(frontRay.collider.CompareTag("Zombie"))
+            {
+                Debug.Log("앞에 좀비가 있다!");
+                if (zombieState == ZombieState.Walking)
+                {
+                    SetState(ZombieState.Jumping);
+                    frontZombie = frontRay.collider.gameObject; // 앞 좀비 저장
+                }
+            }
+        }
+
+        // 위쪽 Ray
+        RaycastHit2D upRay = Physics2D.Raycast((Vector2)transform.position + new Vector2(0, upRayOffset), Vector2.up, upRayDistance);
+        if (upRay)
+        {
+            if (upRay.collider.CompareTag("Zombie"))
+            {
+                Debug.Log("위에 좀비가 있다!");
+                if (zombieState == ZombieState.Walking)
+                {
+                    SetState(ZombieState.Back);
+                }
+            }
+        }
+
+        // 아래쪽 Ray
+        RaycastHit2D downRay = Physics2D.Raycast((Vector2)transform.position - new Vector2(0, downRayOffset), Vector2.down, downRayDistance);
+        if (downRay)
+        {
+            Debug.Log("바닥에 닿았다!");
+            if (zombieState == ZombieState.Jumping && isJumping)
+            {
+                SetState(ZombieState.Walking);
+
+                Physics2D.IgnoreCollision(this.GetComponent<Collider2D>(), frontZombie.GetComponent<Collider2D>(), false);
+                frontZombie = null;
+                isJumping = false;
+            }
+        }
+
+
         switch (zombieState)
         {
             case ZombieState.Walking:
@@ -53,8 +111,8 @@ public class ZombieMovement : MonoBehaviour
         Debug.Log($"{gameObject.name} 이동");
 
         // 이동
-        rb.velocity = new Vector2(-moveSpeed, 0);
-        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
+        rb.velocity = new Vector2(-moveSpeed,  rb.velocity.y); // Y는 기존 값 유지!
+        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
 
     private void Jumping()
@@ -65,17 +123,10 @@ public class ZombieMovement : MonoBehaviour
         if (!isJumping)
         {
             Debug.Log($"{gameObject.name} 점프 ");
-            // 대각선 왼쪽 위 점프를 더 강하게, X축 이동력을 확실히 주기!
-            float jumpX = -moveSpeed * 1.5f;  // ← 튜닝!
-            float jumpY = minJumpForce;       // 점프력
-            Debug.Log($"점프 전 moveSpeed: {moveSpeed}");
+
+            Physics2D.IgnoreCollision(this.GetComponent<Collider2D>(), frontZombie.GetComponent<Collider2D>(), true);
             rb.velocity = new Vector2(-moveSpeed, minJumpForce);
-            Debug.Log($"점프 직후 velocity: {rb.velocity}");
             isJumping = true;
-        }
-        else
-        {
-            Debug.Log($"{gameObject.name} 점프 중");
         }
     }
 
@@ -83,11 +134,18 @@ public class ZombieMovement : MonoBehaviour
     {
         Debug.Log($"{gameObject.name} 뒤로");
 
-        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
+        // 최초 Back 진입 시 위치 저장
+        if (Mathf.Abs(rb.velocity.x) < 0.1f) // 진입 직후
+            backStartPos = transform.position;
 
+        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
         rb.velocity = Vector2.right * moveSpeed;
 
-
+        // 뒤로 충분히 이동했으면 Walking 전환
+        if (Vector2.Distance((Vector2)transform.position, backStartPos) >= backDistance)
+        {
+            SetState(ZombieState.Walking);
+        }
     }
 
     public void SetState(ZombieState state)
@@ -95,85 +153,24 @@ public class ZombieMovement : MonoBehaviour
         zombieState = state;
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        foreach(var contact in collision.contacts)
-        {
-            if (contact.normal.x > 0.7f)
-            {
-                Debug.Log($"{gameObject.name} 기준 왼쪽으로 {collision.gameObject.name}이 닿음");
-
-                CheckOnLeft(collision);
-            }
-
-            if (contact.normal.y < -0.7f)
-            {
-                Debug.Log($"{gameObject.name} 기준 위쪽으로 {collision.gameObject.name}이 닿음");
-                CheckOnUp(collision);
-            }
-
-            if (contact.normal.y > 0.7f)
-            {
-                Debug.Log($"{gameObject.name} 기준 아래쪽으로 {collision.gameObject.name}이 닿음");
-                CheckDown(collision);
-
-            }
-        }
-    }
-
-    private void CheckOnLeft(Collision2D col)
-    {
-        if(col.collider.CompareTag("Zombie"))
-        {
-            if (zombieState == ZombieState.Walking)
-            {
-                frontZombie = col.gameObject;
-                SetState(ZombieState.Jumping);
-            }
-
-            else if (zombieState == ZombieState.Back)
-            {
-                zombieState = ZombieState.Walking;
-            }
-        }
-
-    }
-
-    private void CheckOnUp(Collision2D col)
-    {
-        if(col.collider.CompareTag("Zombie"))
-        {
-            if(zombieState == ZombieState.Walking)
-            {
-                SetState(ZombieState.Back);
-            }
-        }
-    }
-
-    private void CheckDown(Collision2D col)
-    {
-        // Jump -> Walk(바닥에 닿았을 때, y값 변화)
-        if(col.collider.CompareTag("Ground"))
-        {
-            if (zombieState == ZombieState.Jumping && isJumping)
-            {
-                SetState(ZombieState.Walking);
-                isJumping = false;
-            }
-        }
-    }
-
     private void OnDrawGizmosSelected()
     {
-        // Ray 시각화 (디버그용)
+        Vector3 pos = transform.position;
+
+        // 1. 앞쪽 Ray (왼쪽)
         Gizmos.color = Color.red;
-        Vector2 left = (Vector2)transform.position - new Vector2(0.7f, 0);
+        Vector3 frontStart = pos - new Vector3(frontRayOffset, 0, 0);
+        Gizmos.DrawLine(frontStart, frontStart + Vector3.left * frontRayDistance);
 
-        Gizmos.DrawLine(left, left + Vector2.left * rayDistance);
+        // 2. 위쪽 Ray (위)
+        Gizmos.color = Color.green;
+        Vector3 upStart = pos + new Vector3(0, upRayOffset);
+        Gizmos.DrawLine(upStart, upStart + Vector3.up * upRayDistance);
 
+        // 3. 아래쪽 Ray (아래)
         Gizmos.color = Color.blue;
-        Vector2 down = (Vector2)transform.position - new Vector2(0, 0.5f);
-
-        Gizmos.DrawLine(down, down + Vector2.down * rayDistance);
+        Vector3 downStart = pos - new Vector3(0, downRayOffset, 0);
+        Gizmos.DrawLine(downStart, downStart + Vector3.down * downRayDistance);
     }
+
 }
