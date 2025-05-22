@@ -20,6 +20,9 @@ public class ZombieMovement : MonoBehaviour
     public float downRayOffset = 0.1f;           // 아래쪽 Ray 오프셋
     public float downRayDistance = 0.5f;          // 아래쪽 Ray 거리
 
+    private float backTimer = 0f;
+    public float backTime = 0.5f; // 뒤로 가는 시간
+
     public LayerMask zombieLayer;                 // 좀비 레이어
     public LayerMask groundLayer;
 
@@ -91,6 +94,24 @@ public class ZombieMovement : MonoBehaviour
             }
         }
 
+        if (zombieState == ZombieState.Back)
+        {
+            backTimer += Time.deltaTime;
+
+            // Back 상태에서는 Ray/충돌 무시! (Update 내 Raycast/충돌 코드는 건너뜀)
+            // 단, 아래처럼 거리+시간 기준으로만 Walking 복귀
+            if (Vector2.Distance((Vector2)transform.position, backStartPos) >= backDistance || backTimer > backTime)
+            {
+                SetState(ZombieState.Walking);
+                backTimer = 0f;
+            }
+        }
+        else
+        {
+            backTimer = 0f;
+            // 나머지 Ray, 상태 전환 코드 정상 진행
+        }
+
 
         switch (zombieState)
         {
@@ -132,20 +153,8 @@ public class ZombieMovement : MonoBehaviour
 
     private void Back()
     {
-        Debug.Log($"{gameObject.name} 뒤로");
-
-        // 최초 Back 진입 시 위치 저장
-        if (Mathf.Abs(rb.velocity.x) < 0.1f) // 진입 직후
-            backStartPos = transform.position;
-
-        rb.constraints = RigidbodyConstraints2D.FreezePositionY | RigidbodyConstraints2D.FreezeRotation;
-        rb.velocity = Vector2.right * moveSpeed;
-
-        // 뒤로 충분히 이동했으면 Walking 전환
-        if (Vector2.Distance((Vector2)transform.position, backStartPos) >= backDistance)
-        {
-            SetState(ZombieState.Walking);
-        }
+        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+        rb.velocity = Vector2.right * moveSpeed * 2f; // 충분히 빠르게!
     }
 
     public void SetState(ZombieState state)
