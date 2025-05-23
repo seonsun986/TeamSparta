@@ -56,7 +56,7 @@ public class RandomZombieSpawner : MonoBehaviour
 
         // 선택된 Ground에서 좀비 생성
         Transform selectedSpawnPoint = spawnPoints[randomGroundIndex];
-        GameObject newZombie = Instantiate(zombiePrefab, selectedSpawnPoint.position, Quaternion.identity);
+        GameObject newZombie = Instantiate(zombiePrefab, selectedSpawnPoint.position, Quaternion.identity, selectedSpawnPoint);
 
         // 선택된 Ground에 맞는 레이어 설정
         string selectedZombieLayer = zombieLayerNames[randomGroundIndex];

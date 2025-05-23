@@ -84,22 +84,6 @@ public class TowerController : MonoBehaviour
         Debug.Log("=== 타워 목표 지점 도달! 좀비 스폰 시작! ===");
     }
 
-    // 타워 리셋 (테스트용)
-    [ContextMenu("Reset Tower")]
-    public void ResetTower()
-    {
-        transform.position = startPosition;
-        isMoving = true;
-        hasReachedTarget = false;
-
-        Debug.Log("타워 리셋 완료!");
-    }
-
-    // 타워 강제 정지
-    public void ForceStop()
-    {
-        StopTower();
-    }
 
     // 타워 이동 재개
     public void ResumeTower()

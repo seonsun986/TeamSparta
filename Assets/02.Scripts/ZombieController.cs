@@ -39,7 +39,7 @@ public class ZombieController : MonoBehaviour
         ForcedLanding
     }
 
-    private ZombieState currentState = ZombieState.Moving;
+    public ZombieState currentState = ZombieState.Moving;
     private Rigidbody2D rb;
     private CapsuleCollider2D col;
 
@@ -127,13 +127,17 @@ public class ZombieController : MonoBehaviour
 
     void HandlePushedState()
     {
+        // 매 프레임마다 velocity 설정하지 말고, 자연스럽게 놔두기
         float timeSincePushed = Time.time - pushedStartTime;
 
-        if (timeSincePushed > pushTime || Mathf.Abs(rb.velocity.x) < 0.5f)
+        // 시간이 지나거나 속도가 충분히 줄어들면 Moving 상태로 복귀
+        if (timeSincePushed > pushTime || Mathf.Abs(rb.velocity.x) < 0.3f)
         {
             currentState = ZombieState.Moving;
             Debug.Log($"좀비 {gameObject.name} 밀린 상태에서 복귀!");
         }
+
+        Debug.Log($"밀린 상태: {timeSincePushed:F2}초, 속도: {rb.velocity.x:F2}");
     }
 
     void HandleForcedLandingState()
@@ -321,13 +325,13 @@ public class ZombieController : MonoBehaviour
         switch (groundLayer)
         {
             case "Ground1":
-                groundOrderOffset = 0;      // 가장 뒤 (0~999)
+                groundOrderOffset = 1000;      // 가장 뒤 (0~999)
                 break;
             case "Ground2":
-                groundOrderOffset = 1000;   // 중간 (1000~1999)
+                groundOrderOffset = 2000;   // 중간 (1000~1999)
                 break;
             case "Ground3":
-                groundOrderOffset = 2000;   // 가장 앞 (2000~2999)
+                groundOrderOffset = 3000;   // 가장 앞 (2000~2999)
                 break;
             default:
                 groundOrderOffset = 0;
