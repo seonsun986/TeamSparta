@@ -10,12 +10,26 @@ public class ZombieController : MonoBehaviour
     [Header("기어오르기 관련")]
     public float climbForce = 5f;
     public float groundCheckDistance = 0.2f;
-    public float pushRecoveryTime = 1f;
     public float maxClimbTime = 2f;
     public float forcedLandingHeight = 3f;
 
     [Header("밀기 관련")]
     public float pushForce = 1.5f;
+    public float pushTime = 0.1f;
+
+    [Header("레이어 조정")]
+    public bool autoAdjustOrderLayer = true;  // Order Layer 자동 조정 여부
+    public float orderLayerScale = 100f;      // 위치 → Order Layer 변환 비율
+
+    private SpriteRenderer[] allSpriteRenderers;  // 모든 SpriteRenderer 배열
+    private int[] originalOrderLayers;            // 원본 Order Layer 저장
+    private int groundOrderOffset;  // Ground별 기본 오프셋
+
+    // 그룹 설정
+    private string myZombieLayer = "Zombie";  // 기본값
+    private string myGroundLayer = "Ground";  // 기본값
+    private LayerMask zombieLayerMask;
+    private LayerMask groundLayerMask;
 
     public enum ZombieState
     {
@@ -29,16 +43,13 @@ public class ZombieController : MonoBehaviour
     private Rigidbody2D rb;
     private CapsuleCollider2D col;
 
-    // 기어올라가기 관련
     private Transform targetZombie;
     private bool isGrounded = true;
     private bool isClimbing = false;
     private float climbStartTime;
 
-    // 밀린 상태 관련
     private float pushedStartTime;
 
-    // 기즈모용
     private Vector2 zombieDetectionRayOrigin;
     private bool hasFrontZombie = false;
 
@@ -47,6 +58,14 @@ public class ZombieController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         col = GetComponent<CapsuleCollider2D>();
 
+        allSpriteRenderers = GetComponentsInChildren<SpriteRenderer>();
+        originalOrderLayers = new int[allSpriteRenderers.Length];
+
+        // 원본 Order Layer 저장 (상대적 순서 유지용)
+        for (int i = 0; i < allSpriteRenderers.Length; i++)
+        {
+            originalOrderLayers[i] = allSpriteRenderers[i].sortingOrder;
+        }
         col.size = new Vector2(0.5f, 1.0f);
         col.direction = CapsuleDirection2D.Vertical;
         col.isTrigger = false;
@@ -58,11 +77,20 @@ public class ZombieController : MonoBehaviour
         rb.freezeRotation = true;
 
         currentState = ZombieState.Moving;
+
+        // 이 부분 추가
+        UpdateLayerMasks();
     }
 
     void Update()
     {
         CheckGrounded();
+
+        // Order Layer 자동 조정
+        if (autoAdjustOrderLayer)
+        {
+            UpdateOrderLayer();
+        }
 
         switch (currentState)
         {
@@ -101,7 +129,7 @@ public class ZombieController : MonoBehaviour
     {
         float timeSincePushed = Time.time - pushedStartTime;
 
-        if (timeSincePushed > pushRecoveryTime || Mathf.Abs(rb.velocity.x) < 0.5f)
+        if (timeSincePushed > pushTime || Mathf.Abs(rb.velocity.x) < 0.5f)
         {
             currentState = ZombieState.Moving;
             Debug.Log($"좀비 {gameObject.name} 밀린 상태에서 복귀!");
@@ -133,7 +161,7 @@ public class ZombieController : MonoBehaviour
             zombieDetectionRayOrigin,
             Vector2.left,
             overlapDistance,
-            LayerMask.GetMask("Zombie")
+            zombieLayerMask 
         );
 
         hasFrontZombie = hit.collider != null && hit.collider.gameObject != gameObject;
@@ -257,7 +285,7 @@ public class ZombieController : MonoBehaviour
             transform.position,
             Vector2.down,
             groundCheckDistance,
-            LayerMask.GetMask("Ground")
+            groundLayerMask 
         );
 
         isGrounded = groundHit.collider != null;
@@ -273,6 +301,67 @@ public class ZombieController : MonoBehaviour
         if (rb.velocity.x > moveSpeed * 3f)
         {
             rb.velocity = new Vector2(moveSpeed * 3f, rb.velocity.y);
+        }
+    }
+
+    // 스포너에서 호출하는 함수
+    public void SetZombieGroup(string zombieLayer, string groundLayer)
+    {
+        myZombieLayer = zombieLayer;
+        myGroundLayer = groundLayer;
+        UpdateLayerMasks();
+
+        SetGroundOrderOffset(groundLayer);
+
+        Debug.Log($"좀비 그룹 설정: {zombieLayer}, 바닥: {groundLayer}");
+    }
+
+    void SetGroundOrderOffset(string groundLayer)
+    {
+        switch (groundLayer)
+        {
+            case "Ground1":
+                groundOrderOffset = 0;      // 가장 뒤 (0~999)
+                break;
+            case "Ground2":
+                groundOrderOffset = 1000;   // 중간 (1000~1999)
+                break;
+            case "Ground3":
+                groundOrderOffset = 2000;   // 가장 앞 (2000~2999)
+                break;
+            default:
+                groundOrderOffset = 0;
+                break;
+        }
+    }
+
+    void UpdateLayerMasks()
+    {
+        zombieLayerMask = LayerMask.GetMask(myZombieLayer);
+        groundLayerMask = LayerMask.GetMask(myGroundLayer);
+    }
+
+    void UpdateOrderLayer()
+    {
+        if (allSpriteRenderers == null || allSpriteRenderers.Length == 0) return;
+
+        // X 위치에 따른 기본 Order Layer
+        int positionOrderLayer = Mathf.RoundToInt(-transform.position.x * orderLayerScale);
+
+        // 모든 SpriteRenderer에 적용
+        for (int i = 0; i < allSpriteRenderers.Length; i++)
+        {
+            if (allSpriteRenderers[i] == null) continue;
+
+            // 최종 Order Layer = Ground 오프셋 + 위치별 Order Layer + 원본 상대 순서
+            int finalOrderLayer = groundOrderOffset + positionOrderLayer + originalOrderLayers[i];
+
+            // 범위 제한 (각 Ground당 1000 범위 안에서)
+            int minOrder = groundOrderOffset;
+            int maxOrder = groundOrderOffset + 999;
+            finalOrderLayer = Mathf.Clamp(finalOrderLayer, minOrder, maxOrder);
+
+            allSpriteRenderers[i].sortingOrder = finalOrderLayer;
         }
     }
 
