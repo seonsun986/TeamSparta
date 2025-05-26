@@ -18,16 +18,16 @@ public class ZombieController : MonoBehaviour
     public float pushTime = 0.1f;
 
     [Header("레이어 조정")]
-    public bool autoAdjustOrderLayer = true;  // Order Layer 자동 조정 여부
-    public float orderLayerScale = 100f;      // 위치 → Order Layer 변환 비율
+    public bool autoAdjustOrderLayer = true;  
+    public float orderLayerScale = 100f;      
 
-    private SpriteRenderer[] allSpriteRenderers;  // 모든 SpriteRenderer 배열
-    private int[] originalOrderLayers;            // 원본 Order Layer 저장
-    private int groundOrderOffset;  // Ground별 기본 오프셋
+    private SpriteRenderer[] allSpriteRenderers; 
+    private int[] originalOrderLayers;          
+    private int groundOrderOffset;
 
     // 그룹 설정
-    private string myZombieLayer = "Zombie";  // 기본값
-    private string myGroundLayer = "Ground";  // 기본값
+    private string myZombieLayer = "Zombie"; 
+    private string myGroundLayer = "Ground"; 
     private LayerMask zombieLayerMask;
     private LayerMask groundLayerMask;
 
@@ -61,7 +61,6 @@ public class ZombieController : MonoBehaviour
         allSpriteRenderers = GetComponentsInChildren<SpriteRenderer>();
         originalOrderLayers = new int[allSpriteRenderers.Length];
 
-        // 원본 Order Layer 저장 (상대적 순서 유지용)
         for (int i = 0; i < allSpriteRenderers.Length; i++)
         {
             originalOrderLayers[i] = allSpriteRenderers[i].sortingOrder;
@@ -86,7 +85,6 @@ public class ZombieController : MonoBehaviour
     {
         CheckGrounded();
 
-        // Order Layer 자동 조정
         if (autoAdjustOrderLayer)
         {
             UpdateOrderLayer();
@@ -127,25 +125,18 @@ public class ZombieController : MonoBehaviour
 
     void HandlePushedState()
     {
-        // 매 프레임마다 velocity 설정하지 말고, 자연스럽게 놔두기
         float timeSincePushed = Time.time - pushedStartTime;
 
-        // 시간이 지나거나 속도가 충분히 줄어들면 Moving 상태로 복귀
         if (timeSincePushed > pushTime || Mathf.Abs(rb.velocity.x) < 0.3f)
         {
             currentState = ZombieState.Moving;
-            Debug.Log($"좀비 {gameObject.name} 밀린 상태에서 복귀!");
         }
-
-        Debug.Log($"밀린 상태: {timeSincePushed:F2}초, 속도: {rb.velocity.x:F2}");
     }
 
     void HandleForcedLandingState()
     {
-        // 강제로 바닥으로 내려가기
         rb.velocity = new Vector2(-moveSpeed * 0.5f, rb.velocity.y);
 
-        // 바닥에 착지했으면 Moving 상태로
         if (isGrounded && rb.velocity.y <= 0.5f)
         {
             BackToMoving();
@@ -183,7 +174,7 @@ public class ZombieController : MonoBehaviour
     {
         currentState = ZombieState.Climbing;
         isClimbing = true;
-        climbStartTime = Time.time; // 기어올라가기 시작 시간 기록
+        climbStartTime = Time.time;
 
         Debug.Log("=== 기어올라가기 시작! ===");
     }
@@ -192,11 +183,10 @@ public class ZombieController : MonoBehaviour
     {
         float climbTime = Time.time - climbStartTime;
 
-        // 강제 착지 조건들
         bool shouldForceLand =
-            climbTime > maxClimbTime ||                           // 시간 초과
-            transform.position.y > forcedLandingHeight ||         // 너무 높이 올라감
-            targetZombie == null;                                 // 대상 좀비 사라짐
+            climbTime > maxClimbTime ||                        
+            transform.position.y > forcedLandingHeight ||      
+            targetZombie == null;                              
 
         if (shouldForceLand)
         {
@@ -219,7 +209,6 @@ public class ZombieController : MonoBehaviour
             climbDirection = new Vector2(-climbSpeed, 0);
             PushAllZombiesAhead();
 
-            // 충분히 앞으로 갔으면 강제 착지
             if (myPos.x < targetPos.x - 1f)
             {
                 StartForcedLanding();
@@ -229,7 +218,6 @@ public class ZombieController : MonoBehaviour
 
         rb.velocity = climbDirection;
 
-        Debug.Log($"기어올라가는 중: {climbTime:F1}초, 높이: {transform.position.y:F1}");
     }
 
     void StartForcedLanding()
@@ -238,12 +226,10 @@ public class ZombieController : MonoBehaviour
         targetZombie = null;
         isClimbing = false;
 
-        Debug.Log($"=== 좀비 {gameObject.name} 강제 착지 시작! ===");
     }
 
     void PushAllZombiesAhead()
     {
-        // targetZombie만 밀기
         if (targetZombie != null)
         {
             Rigidbody2D zombieRb = targetZombie.GetComponent<Rigidbody2D>();
@@ -251,14 +237,11 @@ public class ZombieController : MonoBehaviour
 
             if (zombieRb != null && otherZombie != null)
             {
-                // 대상 좀비를 Pushed 상태로 만들기
                 otherZombie.GetPushed();
 
-                // velocity 직접 설정
                 Vector2 currentVel = zombieRb.velocity;
                 zombieRb.velocity = new Vector2(pushForce, currentVel.y);
 
-                Debug.Log($"타겟 좀비 {targetZombie.name} 밀기! 새 속도: {zombieRb.velocity}");
             }
         }
     }
@@ -270,8 +253,6 @@ public class ZombieController : MonoBehaviour
         targetZombie = null;
         hasFrontZombie = false;
         isClimbing = false;
-
-        Debug.Log($"좀비 {gameObject.name} 밀림!");
     }
 
     void BackToMoving()
@@ -280,7 +261,6 @@ public class ZombieController : MonoBehaviour
         targetZombie = null;
         hasFrontZombie = false;
         isClimbing = false;
-        Debug.Log("=== 이동 상태로 복귀! ===");
     }
 
     void CheckGrounded()
@@ -297,7 +277,6 @@ public class ZombieController : MonoBehaviour
 
     void FixedUpdate()
     {
-        // 수평 속도 제한
         if (rb.velocity.x < -moveSpeed * 4f)
         {
             rb.velocity = new Vector2(-moveSpeed * 4f, rb.velocity.y);
@@ -308,7 +287,6 @@ public class ZombieController : MonoBehaviour
         }
     }
 
-    // 스포너에서 호출하는 함수
     public void SetZombieGroup(string zombieLayer, string groundLayer)
     {
         myZombieLayer = zombieLayer;
@@ -316,8 +294,6 @@ public class ZombieController : MonoBehaviour
         UpdateLayerMasks();
 
         SetGroundOrderOffset(groundLayer);
-
-        Debug.Log($"좀비 그룹 설정: {zombieLayer}, 바닥: {groundLayer}");
     }
 
     void SetGroundOrderOffset(string groundLayer)
@@ -325,13 +301,13 @@ public class ZombieController : MonoBehaviour
         switch (groundLayer)
         {
             case "Ground1":
-                groundOrderOffset = 1000;      // 가장 뒤 (0~999)
+                groundOrderOffset = 1000;   
                 break;
             case "Ground2":
-                groundOrderOffset = 2000;   // 중간 (1000~1999)
+                groundOrderOffset = 2000; 
                 break;
             case "Ground3":
-                groundOrderOffset = 3000;   // 가장 앞 (2000~2999)
+                groundOrderOffset = 3000;
                 break;
             default:
                 groundOrderOffset = 0;
@@ -349,18 +325,14 @@ public class ZombieController : MonoBehaviour
     {
         if (allSpriteRenderers == null || allSpriteRenderers.Length == 0) return;
 
-        // X 위치에 따른 기본 Order Layer
         int positionOrderLayer = Mathf.RoundToInt(-transform.position.x * orderLayerScale);
 
-        // 모든 SpriteRenderer에 적용
         for (int i = 0; i < allSpriteRenderers.Length; i++)
         {
             if (allSpriteRenderers[i] == null) continue;
 
-            // 최종 Order Layer = Ground 오프셋 + 위치별 Order Layer + 원본 상대 순서
             int finalOrderLayer = groundOrderOffset + positionOrderLayer + originalOrderLayers[i];
 
-            // 범위 제한 (각 Ground당 1000 범위 안에서)
             int minOrder = groundOrderOffset;
             int maxOrder = groundOrderOffset + 999;
             finalOrderLayer = Mathf.Clamp(finalOrderLayer, minOrder, maxOrder);
@@ -378,11 +350,9 @@ public class ZombieController : MonoBehaviour
             transform.position.y + col.size.y * 0.5f
         );
 
-        // 좀비 감지 레이
         Gizmos.color = hasFrontZombie ? Color.red : Color.yellow;
         Gizmos.DrawRay(currentZombieRayOrigin, Vector2.left * overlapDistance);
 
-        // 상태 표시
         switch (currentState)
         {
             case ZombieState.Moving:
@@ -400,7 +370,6 @@ public class ZombieController : MonoBehaviour
         }
         Gizmos.DrawWireSphere(transform.position, 0.15f);
 
-        // 강제 착지 높이 표시
         Gizmos.color = Color.cyan;
         Gizmos.DrawLine(new Vector3(-10, forcedLandingHeight, 0), new Vector3(10, forcedLandingHeight, 0));
 
